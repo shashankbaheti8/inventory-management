@@ -18,16 +18,18 @@ export class InventoryService {
     reference?: string
   ) {
     return prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product || !product.isActive) throw ApiError.notFound('Product not found');
-
-      const previousStock = product.currentStock;
-      const newStock = previousStock + quantity;
-
-      await tx.product.update({
-        where: { id: productId },
-        data: { currentStock: newStock },
+      const updated = await tx.product.updateMany({
+        where: { id: productId, isActive: true },
+        data: { currentStock: { increment: quantity } },
       });
+
+      if (updated.count === 0) throw ApiError.notFound('Product not found');
+
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw ApiError.notFound('Product not found');
+      
+      const newStock = product.currentStock;
+      const previousStock = newStock - quantity;
 
       const transaction = await tx.inventoryTransaction.create({
         data: {
@@ -76,22 +78,20 @@ export class InventoryService {
     reference?: string
   ) {
     return prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product || !product.isActive) throw ApiError.notFound('Product not found');
+      const updated = await tx.product.updateMany({
+        where: { id: productId, isActive: true, currentStock: { gte: quantity } },
+        data: { currentStock: { decrement: quantity } },
+      });
 
-      if (product.currentStock < quantity) {
-        throw ApiError.badRequest(
-          `Insufficient stock. Available: ${product.currentStock}, Requested: ${quantity}`
-        );
+      if (updated.count === 0) {
+        throw ApiError.badRequest('Insufficient stock or product not found');
       }
 
-      const previousStock = product.currentStock;
-      const newStock = previousStock - quantity;
-
-      await tx.product.update({
-        where: { id: productId },
-        data: { currentStock: newStock },
-      });
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw ApiError.notFound('Product not found');
+      
+      const newStock = product.currentStock;
+      const previousStock = newStock + quantity;
 
       const transaction = await tx.inventoryTransaction.create({
         data: {
@@ -138,20 +138,25 @@ export class InventoryService {
     userId: string
   ) {
     return prisma.$transaction(async (tx) => {
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product || !product.isActive) throw ApiError.notFound('Product not found');
+      const isNegative = quantity < 0;
+      const updated = await tx.product.updateMany({
+        where: { 
+          id: productId, 
+          isActive: true,
+          ...(isNegative ? { currentStock: { gte: Math.abs(quantity) } } : {})
+        },
+        data: { currentStock: { increment: quantity } },
+      });
 
-      const previousStock = product.currentStock;
-      const newStock = previousStock + quantity;
-
-      if (newStock < 0) {
-        throw ApiError.badRequest('Adjustment would result in negative stock');
+      if (updated.count === 0) {
+        throw ApiError.badRequest(isNegative ? 'Adjustment would result in negative stock or product not found' : 'Product not found');
       }
 
-      await tx.product.update({
-        where: { id: productId },
-        data: { currentStock: newStock },
-      });
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw ApiError.notFound('Product not found');
+
+      const newStock = product.currentStock;
+      const previousStock = newStock - quantity;
 
       const transaction = await tx.inventoryTransaction.create({
         data: {

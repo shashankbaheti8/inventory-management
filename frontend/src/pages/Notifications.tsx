@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import toast from 'react-hot-toast';
 import { HiOutlineCheckCircle } from 'react-icons/hi';
+import { formatDateTime } from '../utils/format';
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -30,7 +31,7 @@ export default function Notifications() {
                 <div style={{ fontWeight: 600, marginBottom: 2 }}>{n.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{n.message}</div>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(n.createdAt).toLocaleString()}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTime(n.createdAt)}</div>
               {!n.isRead && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-primary)', flexShrink: 0 }} />}
             </div>
           ))}

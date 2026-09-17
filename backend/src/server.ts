@@ -2,8 +2,7 @@ import app from './app';
 import { config } from './config/index';
 import { logger } from './config/logger';
 import { initEmailTransporter } from './config/email';
-import { scheduleLowStockCheck } from './jobs/queues';
-import './jobs/worker'; // Start the worker
+import { initCronJobs } from './jobs/cron';
 
 const start = async () => {
   try {
@@ -11,7 +10,7 @@ const start = async () => {
     await initEmailTransporter();
 
     // Schedule background jobs
-    await scheduleLowStockCheck();
+    initCronJobs();
 
     // Start server
     app.listen(config.port, () => {

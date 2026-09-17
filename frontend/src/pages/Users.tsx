@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import { formatDate } from '../utils/format';
 import toast from 'react-hot-toast';
 import { HiOutlineSearch } from 'react-icons/hi';
 
@@ -30,7 +31,7 @@ export default function Users() {
       {loading ? <div className="loading-container"><div className="spinner" /></div> : (
         <div className="card" style={{ padding: 0 }}><div className="table-container"><table className="data-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>
           {users.map((u: any) => (
-            <tr key={u.id}><td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{u.firstName} {u.lastName}</td><td>{u.email}</td><td><span className={`badge ${roleBadge[u.role]}`}>{u.role.replace('_', ' ')}</span></td><td><span className={`badge ${u.isActive ? 'badge-success' : 'badge-danger'}`}>{u.isActive ? 'Active' : 'Inactive'}</span></td><td style={{ fontSize: 12 }}>{new Date(u.createdAt).toLocaleDateString()}</td>
+            <tr key={u.id}><td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{u.firstName} {u.lastName}</td><td>{u.email}</td><td><span className={`badge ${roleBadge[u.role]}`}>{u.role.replace('_', ' ')}</span></td><td><span className={`badge ${u.isActive ? 'badge-success' : 'badge-danger'}`}>{u.isActive ? 'Active' : 'Inactive'}</span></td><td style={{ fontSize: 12 }}>{formatDate(u.createdAt)}</td>
               <td><div style={{ display: 'flex', gap: 4 }}>
                 <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12 }} value={u.role} onChange={(e) => updateRole(u.id, e.target.value)}><option value="ADMIN">Admin</option><option value="INVENTORY_MANAGER">Manager</option><option value="EMPLOYEE">Employee</option></select>
                 <button className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-primary'}`} onClick={() => toggleActive(u.id)}>{u.isActive ? 'Deactivate' : 'Activate'}</button>

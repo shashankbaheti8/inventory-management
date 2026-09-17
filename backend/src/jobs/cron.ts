@@ -1,15 +1,13 @@
-import { Worker, Job } from 'bullmq';
-import redis from '../config/redis';
+import cron from 'node-cron';
 import prisma from '../config/prisma';
 import { logger } from '../config/logger';
 import { sendEmail } from '../config/email';
 import { NotificationService } from '../modules/notifications/notification.service';
 
-const lowStockWorker = new Worker(
-  'low-stock-check',
-  async (job: Job) => {
-    logger.info('🔍 Running low stock check...');
+export const checkLowStock = async () => {
+  logger.info('🔍 Running low stock check...');
 
+  try {
     const lowStockProducts = await prisma.$queryRaw<any[]>`
       SELECT p.id, p.name, p.sku, p.current_stock, p.minimum_stock_level,
              c.name as category_name
@@ -97,19 +95,19 @@ const lowStockWorker = new Worker(
 
     logger.info(`📧 Low stock alerts sent to ${alertsSent} manager(s)`);
     return { checked: true, alertsSent, lowStockCount: lowStockProducts.length };
-  },
-  {
-    connection: redis,
-    concurrency: 1,
+  } catch (error) {
+    logger.error('Low stock check failed:', error);
+    throw error;
   }
-);
+};
 
-lowStockWorker.on('completed', (job, result) => {
-  logger.info(`Low stock check completed: ${JSON.stringify(result)}`);
-});
-
-lowStockWorker.on('failed', (job, err) => {
-  logger.error(`Low stock check failed: ${err.message}`);
-});
-
-export default lowStockWorker;
+// Initialize cron jobs
+export const initCronJobs = () => {
+  // Schedule low stock check every 2 hours
+  cron.schedule('0 */2 * * *', async () => {
+    logger.info('⏰ Running scheduled low stock check...');
+    await checkLowStock();
+  });
+  
+  logger.info('📋 Background jobs scheduled with node-cron');
+};

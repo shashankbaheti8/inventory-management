@@ -3,6 +3,7 @@ import api from '../api/client';
 import toast from 'react-hot-toast';
 import { HiOutlineSearch, HiOutlinePlus, HiOutlinePencil, HiOutlineTrash } from 'react-icons/hi';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/format';
 
 export default function Products() {
   const { isManager, isAdmin } = useAuth();
@@ -64,7 +65,7 @@ export default function Products() {
                 <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{p.name}</td>
                 <td><span className="badge badge-muted">{p.sku}</span></td>
                 <td>{p.category?.name}</td>
-                <td>${Number(p.price).toFixed(2)}</td>
+                <td>{formatCurrency(p.price)}</td>
                 <td><span className={stockClass(p)} style={{ fontWeight: 700 }}>{p.currentStock}</span></td>
                 <td>{p.minimumStockLevel}</td>
                 {isManager && <td>
@@ -97,7 +98,7 @@ export default function Products() {
               </div>
               <div className="form-group"><label className="form-label">Description</label><textarea className="form-textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
               <div className="form-row">
-                <div className="form-group"><label className="form-label">Price ($)</label><input className="form-input" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Price (₹)</label><input className="form-input" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
                 <div className="form-group"><label className="form-label">Min Stock Level</label><input className="form-input" type="number" value={form.minimumStockLevel} onChange={(e) => setForm({ ...form, minimumStockLevel: e.target.value })} /></div>
               </div>
               <div className="form-group"><label className="form-label">Category</label><select className="form-select" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}><option value="">Select category</option>{categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client';
 import toast from 'react-hot-toast';
 import { HiOutlineArrowDown, HiOutlineArrowUp, HiOutlineAdjustments } from 'react-icons/hi';
+import { formatDateTime } from '../utils/format';
 
 export default function Inventory() {
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -59,7 +60,7 @@ export default function Inventory() {
                 <td style={{ fontWeight: 600 }}>{t.newStock}</td>
                 <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.reason || '—'}</td>
                 <td>{t.createdBy?.firstName} {t.createdBy?.lastName}</td>
-                <td style={{ fontSize: 12 }}>{new Date(t.createdAt).toLocaleString()}</td>
+                <td style={{ fontSize: 12 }}>{formatDateTime(t.createdAt)}</td>
               </tr>
             ))}
             {transactions.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40 }}>No transactions</td></tr>}

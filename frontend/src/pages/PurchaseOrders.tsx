@@ -3,6 +3,7 @@ import api from '../api/client';
 import toast from 'react-hot-toast';
 import { HiOutlinePlus } from 'react-icons/hi';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency, formatDate } from '../utils/format';
 
 export default function PurchaseOrders() {
   const { isManager } = useAuth();
@@ -48,7 +49,7 @@ export default function PurchaseOrders() {
       {loading ? <div className="loading-container"><div className="spinner" /></div> : (
         <div className="card" style={{ padding: 0 }}><div className="table-container"><table className="data-table"><thead><tr><th>Order #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Total</th><th>Created</th><th>Actions</th></tr></thead><tbody>
           {orders.map((o: any) => (
-            <tr key={o.id}><td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => viewDetail(o.id)}>{o.orderNumber}</td><td>{o.supplier?.name}</td><td><span className={`badge ${statusBadge[o.status]}`}>{o.status}</span></td><td>{o._count?.items || 0}</td><td style={{ fontWeight: 600 }}>${Number(o.totalAmount).toFixed(2)}</td><td style={{ fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString()}</td>
+            <tr key={o.id}><td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => viewDetail(o.id)}>{o.orderNumber}</td><td>{o.supplier?.name}</td><td><span className={`badge ${statusBadge[o.status]}`}>{o.status}</span></td><td>{o._count?.items || 0}</td><td style={{ fontWeight: 600 }}>{formatCurrency(o.totalAmount)}</td><td style={{ fontSize: 12 }}>{formatDate(o.createdAt)}</td>
               <td><div style={{ display: 'flex', gap: 4 }}>
                 {o.status === 'CREATED' && isManager && <><button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'APPROVED')}>Approve</button><button className="btn btn-sm btn-danger" onClick={() => handleStatus(o.id, 'CANCELLED')}>Cancel</button></>}
                 {o.status === 'APPROVED' && isManager && <button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'RECEIVED')}>Receive</button>}
@@ -68,12 +69,12 @@ export default function PurchaseOrders() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
               <div><span className="form-label">Supplier</span><p>{showDetail.supplier?.name}</p></div>
               <div><span className="form-label">Status</span><p><span className={`badge ${statusBadge[showDetail.status]}`}>{showDetail.status}</span></p></div>
-              <div><span className="form-label">Total</span><p style={{ fontWeight: 700, fontSize: 18 }}>${Number(showDetail.totalAmount).toFixed(2)}</p></div>
+              <div><span className="form-label">Total</span><p style={{ fontWeight: 700, fontSize: 18 }}>{formatCurrency(showDetail.totalAmount)}</p></div>
               <div><span className="form-label">Created By</span><p>{showDetail.createdBy?.firstName} {showDetail.createdBy?.lastName}</p></div>
             </div>
             <h3 style={{ marginBottom: 12 }}>Items</h3>
             <div className="table-container"><table className="data-table"><thead><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>
-              {showDetail.items?.map((i: any) => (<tr key={i.id}><td>{i.product?.name}</td><td>{i.product?.sku}</td><td>{i.quantity}</td><td>${Number(i.unitPrice).toFixed(2)}</td><td style={{ fontWeight: 600 }}>${Number(i.totalPrice).toFixed(2)}</td></tr>))}
+              {showDetail.items?.map((i: any) => (<tr key={i.id}><td>{i.product?.name}</td><td>{i.product?.sku}</td><td>{i.quantity}</td><td>{formatCurrency(i.unitPrice)}</td><td style={{ fontWeight: 600 }}>{formatCurrency(i.totalPrice)}</td></tr>))}
             </tbody></table></div>
           </div>
         </div></div>

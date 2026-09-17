@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import { formatDateTime } from '../utils/format';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -48,7 +49,7 @@ export default function AuditLogs() {
                       <td>{l.user?.firstName} {l.user?.lastName}</td>
                       <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.previousValue ? JSON.stringify(l.previousValue) : '—'}</td>
                       <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.newValue ? JSON.stringify(l.newValue) : '—'}</td>
-                      <td style={{ fontSize: 12 }}>{new Date(l.createdAt).toLocaleString()}</td>
+                      <td style={{ fontSize: 12 }}>{formatDateTime(l.createdAt)}</td>
                     </tr>
                   ))}
                   {logs.length === 0 &&

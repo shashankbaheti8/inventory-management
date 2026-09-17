@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 
 interface AuditLogData {
   userId: string;
@@ -41,7 +42,7 @@ export class AuditService {
         },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: buildOrderBy(pagination.sortBy, pagination.sortOrder),
       }),
       prisma.auditLog.count({ where }),
     ]);

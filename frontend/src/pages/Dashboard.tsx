@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
-import { HiOutlineCube, HiOutlineTag, HiOutlineTruck, HiOutlineExclamation, HiOutlineCurrencyDollar, HiOutlineDocumentText } from 'react-icons/hi';
+import { formatCurrency } from '../utils/format';
 
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
@@ -14,12 +14,12 @@ export default function Dashboard() {
   if (!data) return <div className="empty-state"><h3>Failed to load dashboard</h3></div>;
 
   const stats = [
-    { label: 'Total Products', value: data.stats.totalProducts, icon: HiOutlineCube, variant: 'primary' },
-    { label: 'Categories', value: data.stats.totalCategories, icon: HiOutlineTag, variant: 'info' },
-    { label: 'Suppliers', value: data.stats.totalSuppliers, icon: HiOutlineTruck, variant: 'success' },
-    { label: 'Active Orders', value: data.stats.activeOrders, icon: HiOutlineDocumentText, variant: 'warning' },
-    { label: 'Low Stock Items', value: data.stats.lowStockCount, icon: HiOutlineExclamation, variant: 'danger' },
-    { label: 'Inventory Value', value: `$${data.stats.totalInventoryValue.toLocaleString()}`, icon: HiOutlineCurrencyDollar, variant: 'primary' },
+    { label: 'Total Products', value: data.stats.totalProducts },
+    { label: 'Categories', value: data.stats.totalCategories },
+    { label: 'Suppliers', value: data.stats.totalSuppliers },
+    { label: 'Active Orders', value: data.stats.activeOrders },
+    { label: 'Low Stock Items', value: data.stats.lowStockCount },
+    { label: 'Inventory Value', value: formatCurrency(data.stats.totalInventoryValue) },
   ];
 
   return (
@@ -28,7 +28,6 @@ export default function Dashboard() {
       <div className="stats-grid">
         {stats.map((s, i) => (
           <div key={i} className="stat-card slide-in" style={{ animationDelay: `${i * 50}ms` }}>
-            <div className={`stat-icon ${s.variant}`}><s.icon /></div>
             <div className="stat-info"><h3>{s.value}</h3><p>{s.label}</p></div>
           </div>
         ))}

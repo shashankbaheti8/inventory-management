@@ -2,6 +2,7 @@ import { OrderStatus, Prisma, TransactionType } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 import { AuditService } from '../audit/audit.service';
 import { logger } from '../../config/logger';
 import { CacheService } from '../../utils/cache';
@@ -36,7 +37,7 @@ export class OrderService {
         },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: buildOrderBy(pagination.sortBy, pagination.sortOrder),
       }),
       prisma.purchaseOrder.count({ where }),
     ]);

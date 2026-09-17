@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 
 export class NotificationService {
   static async getUserNotifications(userId: string, pagination: ParsedPagination) {
@@ -8,7 +9,7 @@ export class NotificationService {
         where: { userId },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: buildOrderBy(pagination.sortBy || 'createdAt', pagination.sortOrder || 'desc'),
       }),
       prisma.notification.count({ where: { userId } }),
     ]);

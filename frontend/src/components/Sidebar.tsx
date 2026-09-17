@@ -1,33 +1,21 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import {
-  HiOutlineHome,
-  HiOutlineCube,
-  HiOutlineTag,
-  HiOutlineClipboardList,
-  HiOutlineTruck,
-  HiOutlineDocumentText,
-  HiOutlineChartBar,
-  HiOutlineUsers,
-  HiOutlineShieldCheck,
-  HiOutlineBell,
-  HiOutlineLogout,
-} from 'react-icons/hi';
+import { HiOutlineLogout } from 'react-icons/hi';
 
 export default function Sidebar() {
-  const { user, logout, isAdmin, isManager } = useAuth();
+  const { user, logout, isAdmin, isManager, unreadCount } = useAuth();
 
   const navItems = [
-    { label: 'Dashboard', icon: HiOutlineHome, to: '/' },
-    { label: 'Products', icon: HiOutlineCube, to: '/products' },
-    { label: 'Categories', icon: HiOutlineTag, to: '/categories' },
-    { label: 'Inventory', icon: HiOutlineClipboardList, to: '/inventory', managerOnly: true },
-    { label: 'Suppliers', icon: HiOutlineTruck, to: '/suppliers' },
-    { label: 'Purchase Orders', icon: HiOutlineDocumentText, to: '/orders' },
-    { label: 'Reports', icon: HiOutlineChartBar, to: '/reports', managerOnly: true },
-    { label: 'Users', icon: HiOutlineUsers, to: '/users', adminOnly: true },
-    { label: 'Audit Logs', icon: HiOutlineShieldCheck, to: '/audit-logs', adminOnly: true },
-    { label: 'Notifications', icon: HiOutlineBell, to: '/notifications' },
+    { label: 'Dashboard', to: '/' },
+    { label: 'Products', to: '/products' },
+    { label: 'Categories', to: '/categories' },
+    { label: 'Inventory', to: '/inventory', managerOnly: true },
+    { label: 'Suppliers', to: '/suppliers' },
+    { label: 'Purchase Orders', to: '/orders' },
+    { label: 'Reports', to: '/reports', managerOnly: true },
+    { label: 'Users', to: '/users', adminOnly: true },
+    { label: 'Audit Logs', to: '/audit-logs', adminOnly: true },
+    { label: 'Notifications', to: '/notifications', badge: unreadCount },
   ];
 
   const filteredItems = navItems.filter((item) => {
@@ -59,8 +47,8 @@ export default function Sidebar() {
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
             end={item.to === '/'}
           >
-            <item.icon />
             {item.label}
+            {item.badge ? <span className="badge badge-danger" style={{ marginLeft: 'auto', padding: '2px 6px', fontSize: 10 }}>{item.badge > 99 ? '99+' : item.badge}</span> : null}
           </NavLink>
         ))}
 
@@ -71,7 +59,6 @@ export default function Sidebar() {
             to={item.to}
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
           >
-            <item.icon />
             {item.label}
           </NavLink>
         ))}
@@ -83,8 +70,8 @@ export default function Sidebar() {
             to={item.to}
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
           >
-            <item.icon />
             {item.label}
+            {item.badge ? <span className="badge badge-danger" style={{ marginLeft: 'auto', padding: '2px 6px', fontSize: 10 }}>{item.badge > 99 ? '99+' : item.badge}</span> : null}
           </NavLink>
         ))}
       </nav>

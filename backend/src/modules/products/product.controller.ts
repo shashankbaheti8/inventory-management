@@ -8,14 +8,16 @@ export class ProductController {
     try {
       const pagination = parsePagination(req.query as any, 'createdAt');
       const categoryId = req.query.categoryId as string | undefined;
-      const { products, total } = await ProductService.getAll(pagination, categoryId);
+      const lowStock = req.query.lowStock === 'true';
+      const outOfStock = req.query.outOfStock === 'true';
+      const { products, total } = await ProductService.getAll(pagination, categoryId, lowStock, outOfStock);
       ApiResponse.paginated(res, products, total, pagination.page, pagination.limit);
     } catch (error) { next(error); }
   }
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const product = await ProductService.getById(req.params.id);
+      const product = await ProductService.getById(req.params.id as string);
       ApiResponse.success(res, product);
     } catch (error) { next(error); }
   }
@@ -29,14 +31,14 @@ export class ProductController {
 
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const product = await ProductService.update(req.params.id, req.body);
+      const product = await ProductService.update(req.params.id as string, req.body);
       ApiResponse.success(res, product, 'Product updated');
     } catch (error) { next(error); }
   }
 
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
-      await ProductService.delete(req.params.id);
+      await ProductService.delete(req.params.id as string);
       ApiResponse.success(res, null, 'Product deleted');
     } catch (error) { next(error); }
   }

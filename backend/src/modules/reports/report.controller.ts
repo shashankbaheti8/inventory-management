@@ -10,9 +10,17 @@ export class ReportController {
     } catch (error) { next(error); }
   }
 
-  static async getInventoryReport(_req: Request, res: Response, next: NextFunction) {
+  static async getInventoryReport(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await ReportService.getInventoryReport();
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string | undefined;
+      const categoryId = req.query.categoryId as string | undefined;
+      const stockStatus = req.query.stockStatus as string | undefined;
+      const sortBy = req.query.sortBy as string | undefined;
+      const sortOrder = req.query.sortOrder as 'asc' | 'desc' | undefined;
+      
+      const data = await ReportService.getInventoryReport({ search, categoryId, stockStatus, page, limit, sortBy, sortOrder });
       ApiResponse.success(res, data);
     } catch (error) { next(error); }
   }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import api from '../api/client';
 
 interface User {
@@ -17,6 +17,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAdmin: boolean;
   isManager: boolean;
+  unreadCount: number;
+  setUnreadCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -24,13 +26,22 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (token) {
       api.get('/auth/profile')
-        .then(({ data }) => setUser(data.data))
-        .catch(() => { localStorage.clear(); })
+        .then(({ data }) => {
+          setUser(data.data);
+          return api.get('/notifications/unread-count');
+        })
+        .then(res => setUnreadCount(res.data.data.count))
+        .catch((err) => { 
+          if (err.response?.status === 401) {
+            localStorage.clear(); 
+          }
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -42,6 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('accessToken', data.data.accessToken);
     localStorage.setItem('refreshToken', data.data.refreshToken);
     setUser(data.data.user);
+    // Fetch initial unread count on login
+    try {
+      const res = await api.get('/notifications/unread-count');
+      setUnreadCount(res.data.data.count);
+    } catch {}
   };
 
   const register = async (regData: { email: string; password: string; firstName: string; lastName: string }) => {
@@ -58,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isManager = user?.role === 'ADMIN' || user?.role === 'INVENTORY_MANAGER';
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isManager }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin, isManager, unreadCount, setUnreadCount }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,7 +3,7 @@ import { AuthController } from './auth.controller';
 import { authenticate } from '../../middleware/auth';
 import { authorize } from '../../middleware/rbac';
 import { validate } from '../../middleware/validate';
-import { registerSchema, loginSchema, refreshTokenSchema, updateUserRoleSchema } from './auth.validation';
+import { registerSchema, loginSchema, refreshTokenSchema, updateUserRoleSchema, createUserSchema } from './auth.validation';
 
 const router = Router();
 
@@ -17,6 +17,7 @@ router.post('/logout', authenticate, AuthController.logout);
 router.get('/profile', authenticate, AuthController.getProfile);
 
 // Admin-only routes
+router.post('/users', authenticate, authorize('ADMIN'), validate(createUserSchema), AuthController.createUser);
 router.get('/users', authenticate, authorize('ADMIN'), AuthController.getAllUsers);
 router.patch('/users/:id/role', authenticate, authorize('ADMIN'), validate(updateUserRoleSchema), AuthController.updateUserRole);
 router.patch('/users/:id/toggle-active', authenticate, authorize('ADMIN'), AuthController.toggleUserActive);

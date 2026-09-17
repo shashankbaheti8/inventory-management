@@ -13,7 +13,14 @@ export const checkLowStock = async () => {
              c.name as category_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.is_active = true AND p.current_stock <= p.minimum_stock_level
+      WHERE p.is_active = true 
+        AND p.current_stock <= p.minimum_stock_level
+        AND p.id NOT IN (
+          SELECT poi.product_id
+          FROM purchase_order_items poi
+          JOIN purchase_orders po ON poi.purchase_order_id = po.id
+          WHERE po.status NOT IN ('COMPLETED', 'CANCELLED')
+        )
       ORDER BY p.current_stock ASC
     `;
 
@@ -103,8 +110,8 @@ export const checkLowStock = async () => {
 
 // Initialize cron jobs
 export const initCronJobs = () => {
-  // Schedule low stock check every 2 hours
-  cron.schedule('0 */2 * * *', async () => {
+  // Schedule low stock check every 12 hours
+  cron.schedule('0 */12 * * *', async () => {
     logger.info('⏰ Running scheduled low stock check...');
     await checkLowStock();
   });

@@ -13,8 +13,14 @@ export const validate = (schema: AnyZodObject) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const messages = error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
-        next(ApiError.badRequest(`Validation failed: ${messages}`));
+        const messages = error.errors.map((e) => {
+          const path = e.path.filter(p => !['body', 'query', 'params'].includes(String(p)));
+          const fieldName = path.map(String).join(' ');
+          const formatted = fieldName.replace(/([A-Z])/g, ' $1').trim();
+          const capitalized = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+          return `${capitalized || 'Input'}: ${e.message}`;
+        });
+        next(ApiError.badRequest(messages.join(' • ')));
       } else {
         next(error);
       }

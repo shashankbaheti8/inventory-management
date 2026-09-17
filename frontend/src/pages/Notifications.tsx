@@ -3,25 +3,50 @@ import api from '../api/client';
 import toast from 'react-hot-toast';
 import { HiOutlineCheckCircle } from 'react-icons/hi';
 import { formatDateTime } from '../utils/format';
+import Pagination from '../components/Pagination';
+import { useAuth } from '../context/AuthContext';
 
 export default function Notifications() {
+  const { setUnreadCount } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
 
-  const fetch = () => { setLoading(true); api.get(`/notifications?page=${page}&limit=20`).then(({ data }) => { setNotifications(data.data); setTotal(data.pagination.total); }).finally(() => setLoading(false)); };
-  useEffect(() => { fetch(); }, [page]);
+  const fetch = () => { setLoading(true); api.get(`/notifications?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`).then(({ data }) => { setNotifications(data.data); setTotal(data.pagination.total); }).finally(() => setLoading(false)); };
+  useEffect(() => { fetch(); }, [page, limit, sortBy, sortOrder]);
 
-  const markRead = async (id: string) => { await api.patch(`/notifications/${id}/read`); fetch(); };
-  const markAllRead = async () => { await api.patch('/notifications/read-all'); toast.success('All marked as read'); fetch(); };
+  const markRead = async (id: string) => { await api.patch(`/notifications/${id}/read`); setUnreadCount(prev => Math.max(0, prev - 1)); fetch(); };
+  const markAllRead = async () => { await api.patch('/notifications/read-all'); setUnreadCount(0); toast.success('All marked as read'); fetch(); };
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / limit);
   const typeIcon: Record<string, string> = { LOW_STOCK: '⚠️', ORDER: '📦', SYSTEM: '🔔' };
 
   return (
     <div className="fade-in">
-      <div className="toolbar"><h1 style={{ fontSize: 24, fontWeight: 800 }}>Notifications</h1><button className="btn btn-secondary" onClick={markAllRead}><HiOutlineCheckCircle /> Mark All Read</button></div>
+      <div className="toolbar">
+        <h1 style={{ fontSize: 24, fontWeight: 800 }}>Notifications</h1>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <select 
+            className="form-select" 
+            value={`${sortBy}-${sortOrder}`} 
+            onChange={(e) => {
+              const [b, o] = e.target.value.split('-');
+              setSortBy(b);
+              setSortOrder(o as 'asc' | 'desc');
+            }}
+          >
+            <option value="createdAt-desc">Newest First</option>
+            <option value="createdAt-asc">Oldest First</option>
+            <option value="type-asc">Type (A-Z)</option>
+            <option value="isRead-asc">Unread First</option>
+          </select>
+          <button className="btn btn-secondary" onClick={markAllRead}><HiOutlineCheckCircle /> Mark All Read</button>
+        </div>
+      </div>
       {loading ? <div className="loading-container"><div className="spinner" /></div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notifications.map((n: any) => (
@@ -38,7 +63,7 @@ export default function Notifications() {
           {notifications.length === 0 && <div className="empty-state"><h3>No notifications</h3><p>You're all caught up!</p></div>}
         </div>
       )}
-      {totalPages > 1 && <div className="pagination"><button disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button><span className="pagination-info">Page {page} of {totalPages}</span><button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button></div>}
+      <Pagination page={page} setPage={setPage} totalPages={totalPages} limit={limit} setLimit={setLimit} options={[10, 20, 50, 100]} />
     </div>
   );
 }

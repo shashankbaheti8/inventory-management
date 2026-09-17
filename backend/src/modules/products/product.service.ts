@@ -3,12 +3,18 @@ import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { CacheService } from '../../utils/cache';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 
 export class ProductService {
-  static async getAll(pagination: ParsedPagination, categoryId?: string) {
+  static async getAll(pagination: ParsedPagination, categoryId?: string, lowStock?: boolean, outOfStock?: boolean) {
     const where: Prisma.ProductWhereInput = { isActive: true };
 
     if (categoryId) where.categoryId = categoryId;
+    if (outOfStock) {
+      where.currentStock = 0;
+    } else if (lowStock) {
+      where.currentStock = { lte: prisma.product.fields.minimumStockLevel, gt: 0 };
+    }
 
     if (pagination.search) {
       where.OR = [
@@ -18,7 +24,7 @@ export class ProductService {
       ];
     }
 
-    const cacheKey = `products:${JSON.stringify({ ...pagination, categoryId })}`;
+    const cacheKey = `products:${JSON.stringify({ ...pagination, categoryId, lowStock, outOfStock })}`;
     const cached = await CacheService.get<{ products: any[]; total: number }>(cacheKey);
     if (cached) return cached;
 
@@ -28,7 +34,7 @@ export class ProductService {
         include: { category: { select: { id: true, name: true } } },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { [pagination.sortBy]: pagination.sortOrder },
+        orderBy: buildOrderBy(pagination.sortBy, pagination.sortOrder),
       }),
       prisma.product.count({ where }),
     ]);

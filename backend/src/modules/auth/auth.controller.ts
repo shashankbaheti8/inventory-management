@@ -13,6 +13,15 @@ export class AuthController {
     }
   }
 
+  static async createUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = await AuthService.createUser(req.body);
+      ApiResponse.created(res, user, 'User created successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async login(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await AuthService.login(req.body.email, req.body.password);
@@ -51,9 +60,9 @@ export class AuthController {
 
   static async getAllUsers(req: Request, res: Response, next: NextFunction) {
     try {
-      const { page, limit, search } = parsePagination(req.query as any);
-      const { users, total } = await AuthService.getAllUsers(page, limit, search);
-      ApiResponse.paginated(res, users, total, page, limit);
+      const pagination = parsePagination(req.query as any);
+      const { users, total } = await AuthService.getAllUsers(pagination);
+      ApiResponse.paginated(res, users, total, pagination.page, pagination.limit);
     } catch (error) {
       next(error);
     }
@@ -61,7 +70,7 @@ export class AuthController {
 
   static async updateUserRole(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = await AuthService.updateUserRole(req.params.id, req.body.role);
+      const user = await AuthService.updateUserRole(req.params.id as string, req.body.role);
       ApiResponse.success(res, user, 'User role updated');
     } catch (error) {
       next(error);
@@ -70,7 +79,7 @@ export class AuthController {
 
   static async toggleUserActive(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = await AuthService.toggleUserActive(req.params.id);
+      const user = await AuthService.toggleUserActive(req.params.id as string);
       ApiResponse.success(res, user, `User ${user.isActive ? 'activated' : 'deactivated'}`);
     } catch (error) {
       next(error);

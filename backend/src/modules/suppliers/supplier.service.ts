@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
+import { CacheService } from '../../utils/cache';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 
 export class SupplierService {
   static async getAll(pagination: ParsedPagination) {
@@ -21,7 +23,7 @@ export class SupplierService {
         include: { _count: { select: { purchaseOrders: true } } },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { [pagination.sortBy]: pagination.sortOrder },
+        orderBy: buildOrderBy(pagination.sortBy, pagination.sortOrder),
       }),
       prisma.supplier.count({ where }),
     ]);

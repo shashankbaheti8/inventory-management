@@ -1,8 +1,9 @@
-import { TransactionType, Prisma } from '@prisma/client';
+import { Prisma, TransactionType, InventoryStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { CacheService } from '../../utils/cache';
 import { ParsedPagination } from '../../types/index';
+import { buildOrderBy } from '../../utils/prismaHelper';
 import { logger } from '../../config/logger';
 import { AuditService } from '../audit/audit.service';
 
@@ -193,6 +194,126 @@ export class InventoryService {
   }
 
   /**
+   * Return — adds units to inventory
+   */
+  static async returnStock(
+    productId: string,
+    quantity: number,
+    reason: string,
+    userId: string,
+    reference?: string
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.product.updateMany({
+        where: { id: productId, isActive: true },
+        data: { currentStock: { increment: quantity } },
+      });
+
+      if (updated.count === 0) throw ApiError.notFound('Product not found');
+
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw ApiError.notFound('Product not found');
+      
+      const newStock = product.currentStock;
+      const previousStock = newStock - quantity;
+
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          productId,
+          transactionType: TransactionType.RETURN,
+          quantity,
+          previousStock,
+          newStock,
+          reason,
+          reference,
+          createdById: userId,
+        },
+        include: {
+          product: { select: { name: true, sku: true } },
+          createdBy: { select: { firstName: true, lastName: true } },
+        },
+      });
+
+      await AuditService.log(tx, {
+        userId,
+        action: 'STOCK_RETURN',
+        entity: 'Product',
+        entityId: productId,
+        previousValue: { currentStock: previousStock },
+        newValue: { currentStock: newStock },
+      });
+
+      logger.info(`Stock RETURN: ${product.sku} +${quantity} (${previousStock} → ${newStock})`);
+
+      await CacheService.del(`product:${productId}`);
+      await CacheService.delPattern('products:*');
+
+      return transaction;
+    });
+  }
+
+  /**
+   * Transfer — removes units from inventory
+   */
+  static async transferStock(
+    productId: string,
+    quantity: number,
+    reason: string,
+    userId: string,
+    reference?: string
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.product.updateMany({
+        where: { id: productId, isActive: true, currentStock: { gte: quantity } },
+        data: { currentStock: { decrement: quantity } },
+      });
+
+      if (updated.count === 0) {
+        throw ApiError.badRequest('Insufficient stock or product not found');
+      }
+
+      const product = await tx.product.findUnique({ where: { id: productId } });
+      if (!product) throw ApiError.notFound('Product not found');
+      
+      const newStock = product.currentStock;
+      const previousStock = newStock + quantity;
+
+      const transaction = await tx.inventoryTransaction.create({
+        data: {
+          productId,
+          transactionType: TransactionType.TRANSFER,
+          quantity,
+          previousStock,
+          newStock,
+          reason,
+          reference,
+          createdById: userId,
+        },
+        include: {
+          product: { select: { name: true, sku: true } },
+          createdBy: { select: { firstName: true, lastName: true } },
+        },
+      });
+
+      await AuditService.log(tx, {
+        userId,
+        action: 'STOCK_TRANSFER',
+        entity: 'Product',
+        entityId: productId,
+        previousValue: { currentStock: previousStock },
+        newValue: { currentStock: newStock },
+      });
+
+      logger.info(`Stock TRANSFER: ${product.sku} -${quantity} (${previousStock} → ${newStock})`);
+
+      await CacheService.del(`product:${productId}`);
+      await CacheService.delPattern('products:*');
+
+      return transaction;
+    });
+  }
+
+  /**
    * Get transaction history with filtering
    */
   static async getHistory(
@@ -223,7 +344,7 @@ export class InventoryService {
         },
         skip: pagination.skip,
         take: pagination.limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: buildOrderBy(pagination.sortBy, pagination.sortOrder),
       }),
       prisma.inventoryTransaction.count({ where }),
     ]);

@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { config } from '../../config/index';
 import { ApiError } from '../../utils/apiError';
-import { JwtPayload } from '../../types/index';
+import { CacheService } from '../../utils/cache';
+import { buildOrderBy } from '../../utils/prismaHelper';
+import { JwtPayload, ParsedPagination } from '../../types/index';
 import { logger } from '../../config/logger';
 
 export class AuthService {
@@ -42,6 +44,43 @@ export class AuthService {
     return user;
   }
 
+  static async createUser(data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName?: string;
+    role: any;
+  }) {
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) {
+      throw ApiError.conflict('Email already registered');
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        password: hashedPassword,
+        firstName: data.firstName,
+        lastName: data.lastName || '',
+        role: data.role,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    logger.info(`User created by Admin: ${user.email} (${user.role})`);
+    return user;
+  }
+
   static async login(email: string, password: string) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -63,12 +102,12 @@ export class AuthService {
       role: user.role,
     };
 
-    const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
-      expiresIn: config.jwt.accessExpiresIn as string,
+    const accessToken = jwt.sign(payload, config.jwt.accessSecret as string, {
+      expiresIn: config.jwt.accessExpiresIn as any,
     });
 
-    const refreshToken = jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshExpiresIn as string,
+    const refreshToken = jwt.sign(payload, config.jwt.refreshSecret as string, {
+      expiresIn: config.jwt.refreshExpiresIn as any,
     });
 
     // Store refresh token in DB
@@ -114,12 +153,12 @@ export class AuthService {
         role: user.role,
       };
 
-      const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
-        expiresIn: config.jwt.accessExpiresIn as string,
+      const accessToken = jwt.sign(payload, config.jwt.accessSecret as string, {
+        expiresIn: config.jwt.accessExpiresIn as any,
       });
 
-      const newRefreshToken = jwt.sign(payload, config.jwt.refreshSecret, {
-        expiresIn: config.jwt.refreshExpiresIn as string,
+      const newRefreshToken = jwt.sign(payload, config.jwt.refreshSecret as string, {
+        expiresIn: config.jwt.refreshExpiresIn as any,
       });
 
       await prisma.user.update({
@@ -161,13 +200,13 @@ export class AuthService {
     return user;
   }
 
-  static async getAllUsers(page: number, limit: number, search?: string) {
+  static async getAllUsers(pagination: ParsedPagination) {
     const where: any = {};
-    if (search) {
+    if (pagination.search) {
       where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: pagination.search, mode: 'insensitive' } },
+        { lastName: { contains: pagination.search, mode: 'insensitive' } },
+        { email: { contains: pagination.search, mode: 'insensitive' } },
       ];
     }
 
@@ -183,9 +222,9 @@ export class AuthService {
           isActive: true,
           createdAt: true,
         },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+        orderBy: buildOrderBy(pagination.sortBy || 'createdAt', pagination.sortOrder || 'desc'),
       }),
       prisma.user.count({ where }),
     ]);

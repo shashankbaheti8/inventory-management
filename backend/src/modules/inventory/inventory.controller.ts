@@ -28,6 +28,21 @@ export class InventoryController {
       ApiResponse.created(res, transaction, 'Stock adjusted successfully');
     } catch (error) { next(error); }
   }
+  static async returnStock(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { productId, quantity, reason, reference } = req.body;
+      const transaction = await InventoryService.returnStock(productId, quantity, reason, req.user!.userId, reference);
+      ApiResponse.created(res, transaction, 'Return processed successfully');
+    } catch (error) { next(error); }
+  }
+
+  static async transferStock(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { productId, quantity, reason, reference } = req.body;
+      const transaction = await InventoryService.transferStock(productId, quantity, reason, req.user!.userId, reference);
+      ApiResponse.created(res, transaction, 'Transfer processed successfully');
+    } catch (error) { next(error); }
+  }
 
   static async getHistory(req: Request, res: Response, next: NextFunction) {
     try {

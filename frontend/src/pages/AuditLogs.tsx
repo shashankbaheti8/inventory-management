@@ -1,23 +1,35 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { formatDateTime } from '../utils/format';
+import Pagination from '../components/Pagination';
+import SortableHeader from '../components/SortableHeader';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/audit-logs?page=${page}&limit=20`)
-      .then(({ data }) => {
-        setLogs(data.data); setTotal(data.pagination.total);
-      })
+    api.get(`/audit-logs?page=${page}&limit=${limit}&sortBy=${sortBy}&sortOrder=${sortOrder}`)
+      .then(({ data }) => { setLogs(data.data); setTotal(data.pagination.total); })
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, limit, sortBy, sortOrder]);
 
-  const totalPages = Math.ceil(total / 20);
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const totalPages = Math.ceil(total / limit);
 
   return (
     <div className="fade-in">
@@ -36,7 +48,7 @@ export default function AuditLogs() {
                     <th>User</th>
                     <th>Previous</th>
                     <th>New</th>
-                    <th>Date</th>
+                    <SortableHeader label="Date" field="createdAt" currentSortBy={sortBy} currentSortOrder={sortOrder} onSort={handleSort} />
                   </tr>
                 </thead>
                 <tbody>
@@ -62,11 +74,7 @@ export default function AuditLogs() {
             </div>
           </div>
         )}
-      {totalPages > 1 && <div className="pagination">
-        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
-        <span className="pagination-info">Page {page} of {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-      </div>}
+      <Pagination page={page} setPage={setPage} totalPages={totalPages} limit={limit} setLimit={setLimit} options={[20, 50, 100]} />
     </div>
   );
 }

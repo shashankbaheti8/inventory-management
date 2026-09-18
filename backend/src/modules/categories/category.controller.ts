@@ -12,7 +12,7 @@ export class CategoryController {
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const category = await CategoryService.getById(req.params.id);
+      const category = await CategoryService.getById(req.params.id as string);
       ApiResponse.success(res, category);
     } catch (error) { next(error); }
   }
@@ -26,14 +26,14 @@ export class CategoryController {
 
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const category = await CategoryService.update(req.params.id, req.body);
+      const category = await CategoryService.update(req.params.id as string, req.body);
       ApiResponse.success(res, category, 'Category updated');
     } catch (error) { next(error); }
   }
 
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
-      await CategoryService.delete(req.params.id);
+      await CategoryService.delete(req.params.id as string);
       ApiResponse.success(res, null, 'Category deleted');
     } catch (error) { next(error); }
   }

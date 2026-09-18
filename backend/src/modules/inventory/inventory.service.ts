@@ -1,4 +1,4 @@
-import { Prisma, TransactionType, InventoryStatus } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { CacheService } from '../../utils/cache';

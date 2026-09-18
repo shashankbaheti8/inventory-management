@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { HiOutlineChevronDown, HiOutlineSearch } from 'react-icons/hi';
 
 export interface Option {

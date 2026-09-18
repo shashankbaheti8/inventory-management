@@ -19,7 +19,7 @@ export class OrderController {
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const order = await OrderService.getById(req.params.id);
+      const order = await OrderService.getById(req.params.id as string);
       ApiResponse.success(res, order);
     } catch (error) { next(error); }
   }
@@ -33,7 +33,7 @@ export class OrderController {
 
   static async updateStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const order = await OrderService.updateStatus(req.params.id, req.body.status, req.user!.userId);
+      const order = await OrderService.updateStatus(req.params.id as string, req.body.status, req.user!.userId);
       ApiResponse.success(res, order, 'Order status updated');
     } catch (error) { next(error); }
   }

@@ -14,7 +14,7 @@ export class SupplierController {
 
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
-      const supplier = await SupplierService.getById(req.params.id);
+      const supplier = await SupplierService.getById(req.params.id as string);
       ApiResponse.success(res, supplier);
     } catch (error) { next(error); }
   }
@@ -28,14 +28,14 @@ export class SupplierController {
 
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const supplier = await SupplierService.update(req.params.id, req.body);
+      const supplier = await SupplierService.update(req.params.id as string, req.body);
       ApiResponse.success(res, supplier, 'Supplier updated');
     } catch (error) { next(error); }
   }
 
   static async delete(req: Request, res: Response, next: NextFunction) {
     try {
-      await SupplierService.delete(req.params.id);
+      await SupplierService.delete(req.params.id as string);
       ApiResponse.success(res, null, 'Supplier deleted');
     } catch (error) { next(error); }
   }

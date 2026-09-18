@@ -9,7 +9,7 @@ A production-style inventory platform for businesses to manage products, stock m
 | Frontend | React + Vite + TypeScript |
 | Backend | Node.js + Express + TypeScript |
 | Database | PostgreSQL + Prisma ORM |
-| Cache & Queue | Redis + BullMQ |
+| Cache & Jobs | Redis + node-cron |
 | Auth | JWT (Access + Refresh tokens) |
 | Email | Nodemailer (Ethereal test SMTP) |
 | Logging | Winston |
@@ -38,18 +38,22 @@ npm install
 npm run dev
 ```
 
-### 4. Access
+### 4. Access Locally
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:5000/api
-- **Health Check**: http://localhost:5000/api/health
 
-## Test Accounts
+## Deployment
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@inventory.com | admin123 |
-| Manager | manager@inventory.com | manager123 |
-| Employee | employee@inventory.com | employee123 |
+### Frontend (Vercel)
+The frontend is optimized for deployment on Vercel. A `vercel.json` file is included in the `frontend` directory to properly handle SPA client-side routing. 
+**Important**: Ensure you set the `VITE_API_URL` environment variable (e.g., `https://your-backend.onrender.com/api`) in your Vercel project settings.
+
+### Backend (Render)
+The backend is configured to be easily deployed on services like Render.
+- **Root Directory**: `backend`
+- **Build Command**: `npm install --include=dev && npm run build` (Ensures `@types` are installed so `tsc` can compile successfully).
+- **Start Command**: `npm start`
+Make sure to add all corresponding environment variables (Database, Redis, JWT Secrets) in your hosting dashboard.
 
 ## API Endpoints
 
@@ -67,12 +71,12 @@ npm run dev
 
 ## Architecture
 
-```
+```text
 Routes → Controllers → Services → Prisma → PostgreSQL
                                           ↕
                                         Redis (Cache)
                                           ↕
-                                     BullMQ (Queue)
+                               node-cron (Background Jobs)
                                           ↓
-                                   Worker → Email Alerts
+                                   Email Alerts
 ```

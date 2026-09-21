@@ -25,11 +25,11 @@ export const checkLowStock = async () => {
     `;
 
     if (lowStockProducts.length === 0) {
-      logger.info('✅ No low stock products found');
+      logger.info('No low stock products found');
       return { checked: true, alertsSent: 0 };
     }
 
-    logger.warn(`⚠️ Found ${lowStockProducts.length} low stock product(s)`);
+    logger.warn(`Found ${lowStockProducts.length} low stock product(s)`);
 
     // Get all admin and inventory manager users
     const managers = await prisma.user.findMany({

@@ -109,15 +109,15 @@ export default function PurchaseOrders() {
           <th>Items</th>
           <SortableHeader label="Total" field="totalAmount" currentSortBy={sortBy} currentSortOrder={sortOrder} onSort={handleSort} />
           <SortableHeader label="Created" field="createdAt" currentSortBy={sortBy} currentSortOrder={sortOrder} onSort={handleSort} />
-          <th>Actions</th>
+          {isManager && <th>Actions</th>}
         </tr></thead><tbody>
           {orders.map((o: any) => (
             <tr key={o.id}><td style={{ color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => viewDetail(o.id)}>{o.orderNumber}</td><td>{o.supplier?.name}</td><td><span className={`badge ${statusBadge[o.status]}`}>{o.status}</span></td><td>{o._count?.items || 0}</td><td style={{ fontWeight: 600 }}>{formatCurrency(o.totalAmount)}</td><td style={{ fontSize: 12 }}>{formatDate(o.createdAt)}</td>
-              <td><div style={{ display: 'flex', gap: 4 }}>
-                {o.status === 'CREATED' && isManager && <><button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'APPROVED')}>Approve</button><button className="btn btn-sm btn-danger" onClick={() => handleStatus(o.id, 'CANCELLED')}>Cancel</button></>}
-                {o.status === 'APPROVED' && isManager && <button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'RECEIVED')}>Receive</button>}
-                {o.status === 'RECEIVED' && isManager && <button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'COMPLETED')}>Complete</button>}
-              </div></td>
+              {isManager && <td><div style={{ display: 'flex', gap: 4 }}>
+                {o.status === 'CREATED' && <><button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'APPROVED')}>Approve</button><button className="btn btn-sm btn-danger" onClick={() => handleStatus(o.id, 'CANCELLED')}>Cancel</button></>}
+                {o.status === 'APPROVED' && <button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'RECEIVED')}>Receive</button>}
+                {o.status === 'RECEIVED' && <button className="btn btn-sm btn-primary" onClick={() => handleStatus(o.id, 'COMPLETED')}>Complete</button>}
+              </div></td>}
             </tr>
           ))}
           {orders.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40 }}>No orders</td></tr>}

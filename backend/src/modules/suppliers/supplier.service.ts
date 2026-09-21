@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
-import { CacheService } from '../../utils/cache';
 import { ParsedPagination } from '../../types/index';
 import { buildOrderBy } from '../../utils/prismaHelper';
 

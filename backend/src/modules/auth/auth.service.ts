@@ -1,10 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { Prisma, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { config } from '../../config/index';
 import { ApiError } from '../../utils/apiError';
-import { CacheService } from '../../utils/cache';
 import { buildOrderBy } from '../../utils/prismaHelper';
 import { JwtPayload, ParsedPagination } from '../../types/index';
 import { logger } from '../../config/logger';

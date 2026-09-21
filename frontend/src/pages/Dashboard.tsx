@@ -7,11 +7,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/reports/dashboard').then(({ data: res }) => setData(res.data)).catch(console.error).finally(() => setLoading(false));
+    api.get('/reports/dashboard')
+      .then(({ data: res }) => setData(res.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-container"><div className="spinner" /></div>;
-  if (!data) return <div className="empty-state"><h3>Failed to load dashboard</h3></div>;
+  if (loading)
+    return <div className="loading-container"><div className="spinner" /></div>;
+  if (!data)
+    return <div className="empty-state"><h3>Failed to load dashboard</h3></div>;
 
   const stats = [
     { label: 'Total Products', value: data.stats.totalProducts },
@@ -37,7 +42,7 @@ export default function Dashboard() {
         {data.recentTransactions.length === 0 ? <div className="empty-state"><p>No transactions yet</p></div> : (
           <div className="table-container"><table className="data-table"><thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>By</th></tr></thead><tbody>
             {data.recentTransactions.map((t: any) => (
-              <tr key={t.id}><td style={{color:'var(--text-primary)',fontWeight:500}}>{t.product.name}</td><td><span className="badge badge-info">{t.transactionType.replace('_',' ')}</span></td><td style={{fontWeight:600}}>{t.quantity}</td><td>{t.createdBy.firstName} {t.createdBy.lastName}</td></tr>
+              <tr key={t.id}><td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{t.product.name}</td><td><span className="badge badge-info">{t.transactionType.replace('_', ' ')}</span></td><td style={{ fontWeight: 600 }}>{t.quantity}</td><td>{t.createdBy.firstName} {t.createdBy.lastName}</td></tr>
             ))}
           </tbody></table></div>
         )}

@@ -26,14 +26,14 @@ export const initEmailTransporter = async (): Promise<void> => {
         pass: testAccount.pass,
       },
     });
-    logger.info(`📧 Ethereal test email account created: ${testAccount.user}`);
+    logger.info(`Ethereal test email account created: ${testAccount.user}`);
   }
 
   try {
     await transporter.verify();
-    logger.info('✅ Email transporter verified');
+    logger.info('Email transporter verified');
   } catch (err) {
-    logger.warn('⚠️ Email transporter verification failed — emails may not send');
+    logger.warn('Email transporter verification failed — emails may not send');
   }
 };
 
@@ -52,13 +52,13 @@ export const sendEmail = async (
 
     const previewUrl = nodemailer.getTestMessageUrl(info);
     if (previewUrl) {
-      logger.info(`📧 Email preview: ${previewUrl}`);
+      logger.info(`Email preview: ${previewUrl}`);
     }
 
-    logger.info(`📧 Email sent to ${to}: ${info.messageId}`);
+    logger.info(`Email sent to ${to}: ${info.messageId}`);
     return info;
   } catch (error) {
-    logger.error('❌ Email send failed:', error);
+    logger.error('Email send failed:', error);
     throw error;
   }
 };

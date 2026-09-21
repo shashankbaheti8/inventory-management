@@ -13,7 +13,7 @@ const redis = new Redis(config.redis.url, {
 });
 
 redis.on('connect', () => {
-  logger.info('✅ Redis connected');
+  logger.info('  Redis connected');
 });
 
 redis.on('error', (err: Error) => {

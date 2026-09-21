@@ -1,4 +1,3 @@
-import { PrismaClient } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { ParsedPagination } from '../../types/index';
 import { buildOrderBy } from '../../utils/prismaHelper';

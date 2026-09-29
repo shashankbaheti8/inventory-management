@@ -1,5 +1,18 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { CacheService } from '../../utils/cache';
+
+/** Whitelisted sort fields for the inventory report → SQL expressions. */
+const REPORT_SORT_COLUMNS: Record<string, string> = {
+  name: 'p.name',
+  sku: 'p.sku',
+  price: 'p.price',
+  currentStock: 'p.current_stock',
+  minimumStockLevel: 'p.minimum_stock_level',
+  value: '(p.price * p.current_stock)',
+  'category.name': 'c.name',
+  createdAt: 'p.created_at',
+};
 
 export class ReportService {
   static async getDashboard() {
@@ -60,96 +73,81 @@ export class ReportService {
     return dashboard;
   }
 
+  /**
+   * Inventory report. Filtering, sorting, pagination and the summary totals all
+   * run in PostgreSQL, so the API never loads the whole product table into
+   * memory. Sort columns come from a whitelist, so user input never reaches
+   * the SQL as raw text.
+   */
   static async getInventoryReport(filters: { search?: string; categoryId?: string; stockStatus?: string; page?: number; limit?: number; sortBy?: string; sortOrder?: 'asc' | 'desc' } = {}) {
-    const allProducts = await prisma.product.findMany({
-      where: { isActive: true },
-      include: { category: { select: { name: true } } },
-      orderBy: { currentStock: 'asc' },
-    });
+    const page = Math.max(1, filters.page || 1);
+    const limit = Math.min(100, Math.max(1, filters.limit || 10));
 
-    const totalValue = allProducts.reduce(
-      (sum, p) => sum + Number(p.price) * p.currentStock,
-      0
-    );
-
-    const globalLowStock = allProducts.filter((p) => p.currentStock <= p.minimumStockLevel);
-    const globalOutOfStock = allProducts.filter((p) => p.currentStock === 0);
-
-    let filteredProducts = allProducts;
-
+    const conditions: Prisma.Sql[] = [Prisma.sql`p.is_active = true`];
     if (filters.categoryId) {
-      filteredProducts = filteredProducts.filter(p => p.categoryId === filters.categoryId);
+      conditions.push(Prisma.sql`p.category_id = ${filters.categoryId}`);
     }
-    
     if (filters.search) {
-      const s = filters.search.toLowerCase();
-      filteredProducts = filteredProducts.filter(p => p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s));
+      const term = `%${filters.search}%`;
+      conditions.push(Prisma.sql`(p.name ILIKE ${term} OR p.sku ILIKE ${term})`);
     }
-
-    if (filters.stockStatus) {
-      if (filters.stockStatus === 'out') {
-        filteredProducts = filteredProducts.filter(p => p.currentStock === 0);
-      } else if (filters.stockStatus === 'low') {
-        filteredProducts = filteredProducts.filter(p => p.currentStock > 0 && p.currentStock <= p.minimumStockLevel);
-      } else if (filters.stockStatus === 'ok') {
-        filteredProducts = filteredProducts.filter(p => p.currentStock > p.minimumStockLevel);
-      }
+    if (filters.stockStatus === 'out') {
+      conditions.push(Prisma.sql`p.current_stock = 0`);
+    } else if (filters.stockStatus === 'low') {
+      conditions.push(Prisma.sql`p.current_stock > 0 AND p.current_stock <= p.minimum_stock_level`);
+    } else if (filters.stockStatus === 'ok') {
+      conditions.push(Prisma.sql`p.current_stock > p.minimum_stock_level`);
     }
+    const where = Prisma.join(conditions, ' AND ');
 
-    const sortBy = filters.sortBy || 'name';
-    const sortOrder = filters.sortOrder || 'asc';
-    const modifier = sortOrder === 'asc' ? 1 : -1;
+    const sortColumn = REPORT_SORT_COLUMNS[filters.sortBy || 'name'] ?? REPORT_SORT_COLUMNS.name;
+    const direction = filters.sortOrder === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = Prisma.raw(`${sortColumn} ${direction} NULLS LAST, p.id ASC`);
 
-    filteredProducts.sort((a: any, b: any) => {
-      let valA, valB;
-      
-      if (sortBy === 'value') {
-        valA = Number(a.price) * a.currentStock;
-        valB = Number(b.price) * b.currentStock;
-      } else {
-        valA = a[sortBy];
-        valB = b[sortBy];
-        
-        // Handle nested fields like category.name
-        if (sortBy.includes('.')) {
-          const parts = sortBy.split('.');
-          valA = a; valB = b;
-          for (const p of parts) {
-            valA = valA ? valA[p] : undefined;
-            valB = valB ? valB[p] : undefined;
-          }
-        }
-      }
+    const [pageRows, [{ count }], [summary]] = await Promise.all([
+      prisma.$queryRaw<{ id: string }[]>`
+        SELECT p.id
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        WHERE ${where}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${(page - 1) * limit}
+      `,
+      prisma.$queryRaw<[{ count: number }]>`
+        SELECT COUNT(*)::int AS count FROM products p WHERE ${where}
+      `,
+      prisma.$queryRaw<[{ total_products: number; total_value: number; low_stock: number; out_of_stock: number }]>`
+        SELECT
+          COUNT(*)::int                                                         AS total_products,
+          COALESCE(SUM(price * current_stock), 0)::float8                       AS total_value,
+          COUNT(*) FILTER (WHERE current_stock <= minimum_stock_level)::int     AS low_stock,
+          COUNT(*) FILTER (WHERE current_stock = 0)::int                        AS out_of_stock
+        FROM products
+        WHERE is_active = true
+      `,
+    ]);
 
-      if (valA === valB) return 0;
-      if (valA === undefined || valA === null) return 1 * modifier;
-      if (valB === undefined || valB === null) return -1 * modifier;
-      
-      if (typeof valA === 'string' && typeof valB === 'string') {
-        return valA.localeCompare(valB) * modifier;
-      }
-      return (valA < valB ? -1 : 1) * modifier;
+    // Load the page's products with their category, then restore SQL order.
+    const ids = pageRows.map((r) => r.id);
+    const products = await prisma.product.findMany({
+      where: { id: { in: ids } },
+      include: { category: { select: { name: true } } },
     });
-
-    const totalFiltered = filteredProducts.length;
-    
-    // Apply pagination
-    const page = filters.page || 1;
-    const limit = filters.limit || 10;
-    const paginatedProducts = filteredProducts.slice((page - 1) * limit, page * limit);
+    const position = new Map(ids.map((id, i) => [id, i]));
+    products.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
 
     return {
-      products: paginatedProducts,
+      products,
       pagination: {
-        total: totalFiltered,
+        total: count,
         page,
         limit,
       },
       summary: {
-        totalProducts: allProducts.length,
-        totalValue,
-        lowStockCount: globalLowStock.length,
-        outOfStockCount: globalOutOfStock.length,
+        totalProducts: summary.total_products,
+        totalValue: summary.total_value,
+        lowStockCount: summary.low_stock,
+        outOfStockCount: summary.out_of_stock,
       },
     };
   }
@@ -169,14 +167,21 @@ export class ReportService {
       _sum: { quantity: true },
     });
 
+    const dateConditions: Prisma.Sql[] = [];
+    if (startDate) dateConditions.push(Prisma.sql`created_at >= ${new Date(startDate)}`);
+    if (endDate) dateConditions.push(Prisma.sql`created_at <= ${new Date(endDate)}`);
+    const dateWhere = dateConditions.length
+      ? Prisma.sql`WHERE ${Prisma.join(dateConditions, ' AND ')}`
+      : Prisma.empty;
+
     const daily = await prisma.$queryRaw<any[]>`
       SELECT
         DATE(created_at) as date,
         transaction_type,
-        COUNT(*) as count,
-        SUM(quantity) as total_quantity
+        COUNT(*)::int as count,
+        SUM(quantity)::int as total_quantity
       FROM inventory_transactions
-      ${startDate ? prisma.$queryRaw`WHERE created_at >= ${new Date(startDate)}` : prisma.$queryRaw``}
+      ${dateWhere}
       GROUP BY DATE(created_at), transaction_type
       ORDER BY date DESC
       LIMIT 30

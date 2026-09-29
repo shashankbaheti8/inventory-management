@@ -31,12 +31,23 @@ export class CacheService {
     }
   }
 
+  /**
+   * Deletes keys matching a pattern using SCAN, which walks the keyspace in
+   * small batches instead of blocking Redis the way KEYS does.
+   */
   static async delPattern(pattern: string): Promise<void> {
     try {
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-        logger.debug(`Cache: Deleted ${keys.length} keys matching "${pattern}"`);
+      let cursor = '0';
+      let deleted = 0;
+      do {
+        const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = next;
+        if (keys.length > 0) {
+          deleted += await redis.del(...keys);
+        }
+      } while (cursor !== '0');
+      if (deleted > 0) {
+        logger.debug(`Cache: Deleted ${deleted} keys matching "${pattern}"`);
       }
     } catch (error) {
       logger.error(`Cache DEL pattern error for "${pattern}":`, error);

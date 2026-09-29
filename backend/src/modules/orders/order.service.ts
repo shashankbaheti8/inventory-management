@@ -7,12 +7,26 @@ import { AuditService } from '../audit/audit.service';
 import { logger } from '../../config/logger';
 import { CacheService } from '../../utils/cache';
 
+const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  CREATED: ['APPROVED', 'CANCELLED'],
+  APPROVED: ['RECEIVED', 'CANCELLED'],
+  RECEIVED: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 export class OrderService {
+  /**
+   * Order numbers come from a Postgres sequence, so concurrent requests can
+   * never be handed the same number (unlike `count() + 1`).
+   */
   private static async generateOrderNumber(): Promise<string> {
-    const count = await prisma.purchaseOrder.count();
+    const [{ seq }] = await prisma.$queryRaw<[{ seq: bigint }]>`
+      SELECT nextval('purchase_order_number_seq') AS seq
+    `;
     const date = new Date();
     const prefix = `PO-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-    return `${prefix}-${String(count + 1).padStart(5, '0')}`;
+    return `${prefix}-${String(seq).padStart(5, '0')}`;
   }
 
   static async getAll(pagination: ParsedPagination, filters: { status?: OrderStatus; supplierId?: string }) {
@@ -111,32 +125,28 @@ export class OrderService {
   static async updateStatus(id: string, newStatus: OrderStatus, userId: string) {
     const order = await this.getById(id);
 
-    // Validate state transitions
-    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      CREATED: ['APPROVED', 'CANCELLED'],
-      APPROVED: ['RECEIVED', 'CANCELLED'],
-      RECEIVED: ['COMPLETED'],
-      COMPLETED: [],
-      CANCELLED: [],
-    };
-
-    if (!validTransitions[order.status].includes(newStatus)) {
+    if (!VALID_TRANSITIONS[order.status].includes(newStatus)) {
       throw ApiError.badRequest(`Cannot transition from ${order.status} to ${newStatus}`);
     }
 
-    // When order is RECEIVED, auto stock-in all items
-    if (newStatus === 'RECEIVED') {
-      await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
+      // Claim the transition with a conditional update. If another request
+      // already moved the order out of its current status, this matches zero
+      // rows and we abort — so an order can never be received twice.
+      const claimed = await tx.purchaseOrder.updateMany({
+        where: { id, status: order.status },
+        data: { status: newStatus },
+      });
+      if (claimed.count === 0) {
+        throw ApiError.conflict('Order status was changed by another request. Please refresh and try again.');
+      }
+
+      // When order is RECEIVED, auto stock-in all items with atomic increments
+      if (newStatus === 'RECEIVED') {
         for (const item of order.items) {
-          const product = await tx.product.findUnique({ where: { id: item.productId } });
-          if (!product) continue;
-
-          const previousStock = product.currentStock;
-          const newStock = previousStock + item.quantity;
-
-          await tx.product.update({
+          const product = await tx.product.update({
             where: { id: item.productId },
-            data: { currentStock: newStock },
+            data: { currentStock: { increment: item.quantity } },
           });
 
           await tx.inventoryTransaction.create({
@@ -144,39 +154,17 @@ export class OrderService {
               productId: item.productId,
               transactionType: TransactionType.STOCK_IN,
               quantity: item.quantity,
-              previousStock,
-              newStock,
+              previousStock: product.currentStock - item.quantity,
+              newStock: product.currentStock,
               reason: `Purchase order ${order.orderNumber} received`,
               reference: order.orderNumber,
               createdById: userId,
             },
           });
         }
+      }
 
-        await tx.purchaseOrder.update({
-          where: { id },
-          data: { status: newStatus },
-        });
-
-        await AuditService.log(tx, {
-          userId,
-          action: 'ORDER_STATUS_CHANGE',
-          entity: 'PurchaseOrder',
-          entityId: id,
-          previousValue: { status: order.status },
-          newValue: { status: newStatus },
-        });
-      });
-
-      await CacheService.delPattern('products:*');
-      logger.info(`Order ${order.orderNumber}: stock received and inventory updated`);
-    } else {
-      await prisma.purchaseOrder.update({
-        where: { id },
-        data: { status: newStatus },
-      });
-
-      await AuditService.log(prisma, {
+      await AuditService.log(tx, {
         userId,
         action: 'ORDER_STATUS_CHANGE',
         entity: 'PurchaseOrder',
@@ -184,6 +172,12 @@ export class OrderService {
         previousValue: { status: order.status },
         newValue: { status: newStatus },
       });
+    });
+
+    if (newStatus === 'RECEIVED') {
+      await CacheService.delPattern('products:*');
+      for (const item of order.items) await CacheService.del(`product:${item.productId}`);
+      logger.info(`Order ${order.orderNumber}: stock received and inventory updated`);
     }
 
     logger.info(`Order ${order.orderNumber}: ${order.status} → ${newStatus}`);

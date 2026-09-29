@@ -2,16 +2,32 @@ import { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../utils/apiError';
 import { logger } from '../config/logger';
 
+const SENSITIVE_KEYS = new Set(['password', 'currentpassword', 'newpassword', 'token', 'accesstoken', 'refreshtoken']);
+
+/** Returns a copy of the request body with credentials masked, safe to log. */
+export const redactSensitive = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, v]) => [
+        key,
+        SENSITIVE_KEYS.has(key.toLowerCase()) ? '[REDACTED]' : redactSensitive(v),
+      ])
+    );
+  }
+  return value;
+};
+
 export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
   _next: NextFunction
 ): void => {
-  // Log the error
+  // Log the error (credentials in the body are masked)
   logger.error(`${req.method} ${req.path} — ${err.message}`, {
     stack: err.stack,
-    body: req.body,
+    body: redactSensitive(req.body),
     params: req.params,
     query: req.query,
   });

@@ -7,221 +7,56 @@ import { buildOrderBy } from '../../utils/prismaHelper';
 import { logger } from '../../config/logger';
 import { AuditService } from '../audit/audit.service';
 
+interface MovementInput {
+  productId: string;
+  type: TransactionType;
+  /** Signed change in stock: positive adds units, negative removes them. */
+  delta: number;
+  auditAction: string;
+  reason: string;
+  userId: string;
+  reference?: string;
+}
+
 export class InventoryService {
   /**
-   * Stock In — adds units to inventory inside a transaction
+   * Applies a stock movement atomically.
+   *
+   * The stock check and the update happen in a single conditional UPDATE
+   * (`... WHERE current_stock >= n`), so concurrent removals can never push
+   * stock below zero. The transaction record and audit log are written in the
+   * same database transaction, and the cache is invalidated only after commit
+   * so readers cannot re-cache pre-commit data.
    */
-  static async stockIn(
-    productId: string,
-    quantity: number,
-    reason: string,
-    userId: string,
-    reference?: string
-  ) {
-    return prisma.$transaction(async (tx) => {
+  private static async applyMovement(input: MovementInput) {
+    const { productId, type, delta, auditAction, reason, userId, reference } = input;
+    const isRemoval = delta < 0;
+
+    const transaction = await prisma.$transaction(async (tx) => {
       const updated = await tx.product.updateMany({
-        where: { id: productId, isActive: true },
-        data: { currentStock: { increment: quantity } },
-      });
-
-      if (updated.count === 0) throw ApiError.notFound('Product not found');
-
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product) throw ApiError.notFound('Product not found');
-      
-      const newStock = product.currentStock;
-      const previousStock = newStock - quantity;
-
-      const transaction = await tx.inventoryTransaction.create({
-        data: {
-          productId,
-          transactionType: TransactionType.STOCK_IN,
-          quantity,
-          previousStock,
-          newStock,
-          reason,
-          reference,
-          createdById: userId,
-        },
-        include: {
-          product: { select: { name: true, sku: true } },
-          createdBy: { select: { firstName: true, lastName: true } },
-        },
-      });
-
-      // Audit log
-      await AuditService.log(tx, {
-        userId,
-        action: 'STOCK_IN',
-        entity: 'Product',
-        entityId: productId,
-        previousValue: { currentStock: previousStock },
-        newValue: { currentStock: newStock },
-      });
-
-      logger.info(`Stock IN: ${product.sku} +${quantity} (${previousStock} → ${newStock})`);
-
-      await CacheService.del(`product:${productId}`);
-      await CacheService.delPattern('products:*');
-
-      return transaction;
-    });
-  }
-
-  /**
-   * Stock Out — removes units from inventory
-   */
-  static async stockOut(
-    productId: string,
-    quantity: number,
-    reason: string,
-    userId: string,
-    reference?: string
-  ) {
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.product.updateMany({
-        where: { id: productId, isActive: true, currentStock: { gte: quantity } },
-        data: { currentStock: { decrement: quantity } },
-      });
-
-      if (updated.count === 0) {
-        throw ApiError.badRequest('Insufficient stock or product not found');
-      }
-
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product) throw ApiError.notFound('Product not found');
-      
-      const newStock = product.currentStock;
-      const previousStock = newStock + quantity;
-
-      const transaction = await tx.inventoryTransaction.create({
-        data: {
-          productId,
-          transactionType: TransactionType.STOCK_OUT,
-          quantity,
-          previousStock,
-          newStock,
-          reason,
-          reference,
-          createdById: userId,
-        },
-        include: {
-          product: { select: { name: true, sku: true } },
-          createdBy: { select: { firstName: true, lastName: true } },
-        },
-      });
-
-      await AuditService.log(tx, {
-        userId,
-        action: 'STOCK_OUT',
-        entity: 'Product',
-        entityId: productId,
-        previousValue: { currentStock: previousStock },
-        newValue: { currentStock: newStock },
-      });
-
-      logger.info(`Stock OUT: ${product.sku} -${quantity} (${previousStock} → ${newStock})`);
-
-      await CacheService.del(`product:${productId}`);
-      await CacheService.delPattern('products:*');
-
-      return transaction;
-    });
-  }
-
-  /**
-   * Adjustment — set stock to a specific value (can be + or -)
-   */
-  static async adjustment(
-    productId: string,
-    quantity: number,
-    reason: string,
-    userId: string
-  ) {
-    return prisma.$transaction(async (tx) => {
-      const isNegative = quantity < 0;
-      const updated = await tx.product.updateMany({
-        where: { 
-          id: productId, 
+        where: {
+          id: productId,
           isActive: true,
-          ...(isNegative ? { currentStock: { gte: Math.abs(quantity) } } : {})
+          ...(isRemoval ? { currentStock: { gte: Math.abs(delta) } } : {}),
         },
-        data: { currentStock: { increment: quantity } },
+        data: { currentStock: { increment: delta } },
       });
 
       if (updated.count === 0) {
-        throw ApiError.badRequest(isNegative ? 'Adjustment would result in negative stock or product not found' : 'Product not found');
+        throw isRemoval
+          ? ApiError.badRequest('Insufficient stock or product not found')
+          : ApiError.notFound('Product not found');
       }
 
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product) throw ApiError.notFound('Product not found');
-
+      const product = await tx.product.findUniqueOrThrow({ where: { id: productId } });
       const newStock = product.currentStock;
-      const previousStock = newStock - quantity;
+      const previousStock = newStock - delta;
 
-      const transaction = await tx.inventoryTransaction.create({
+      const record = await tx.inventoryTransaction.create({
         data: {
           productId,
-          transactionType: TransactionType.ADJUSTMENT,
-          quantity: Math.abs(quantity),
-          previousStock,
-          newStock,
-          reason,
-          createdById: userId,
-        },
-        include: {
-          product: { select: { name: true, sku: true } },
-          createdBy: { select: { firstName: true, lastName: true } },
-        },
-      });
-
-      await AuditService.log(tx, {
-        userId,
-        action: 'STOCK_ADJUSTMENT',
-        entity: 'Product',
-        entityId: productId,
-        previousValue: { currentStock: previousStock },
-        newValue: { currentStock: newStock },
-      });
-
-      logger.info(`Stock ADJUSTMENT: ${product.sku} ${quantity >= 0 ? '+' : ''}${quantity} (${previousStock} → ${newStock})`);
-
-      await CacheService.del(`product:${productId}`);
-      await CacheService.delPattern('products:*');
-
-      return transaction;
-    });
-  }
-
-  /**
-   * Return — adds units to inventory
-   */
-  static async returnStock(
-    productId: string,
-    quantity: number,
-    reason: string,
-    userId: string,
-    reference?: string
-  ) {
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.product.updateMany({
-        where: { id: productId, isActive: true },
-        data: { currentStock: { increment: quantity } },
-      });
-
-      if (updated.count === 0) throw ApiError.notFound('Product not found');
-
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product) throw ApiError.notFound('Product not found');
-      
-      const newStock = product.currentStock;
-      const previousStock = newStock - quantity;
-
-      const transaction = await tx.inventoryTransaction.create({
-        data: {
-          productId,
-          transactionType: TransactionType.RETURN,
-          quantity,
+          transactionType: type,
+          quantity: Math.abs(delta),
           previousStock,
           newStock,
           reason,
@@ -236,80 +71,56 @@ export class InventoryService {
 
       await AuditService.log(tx, {
         userId,
-        action: 'STOCK_RETURN',
+        action: auditAction,
         entity: 'Product',
         entityId: productId,
         previousValue: { currentStock: previousStock },
         newValue: { currentStock: newStock },
       });
 
-      logger.info(`Stock RETURN: ${product.sku} +${quantity} (${previousStock} → ${newStock})`);
+      logger.info(`${type}: ${product.sku} ${delta >= 0 ? '+' : ''}${delta} (${previousStock} → ${newStock})`);
+      return record;
+    });
 
-      await CacheService.del(`product:${productId}`);
-      await CacheService.delPattern('products:*');
+    await CacheService.del(`product:${productId}`);
+    await CacheService.delPattern('products:*');
 
-      return transaction;
+    return transaction;
+  }
+
+  static stockIn(productId: string, quantity: number, reason: string, userId: string, reference?: string) {
+    return this.applyMovement({
+      productId, type: TransactionType.STOCK_IN, delta: quantity,
+      auditAction: 'STOCK_IN', reason, userId, reference,
     });
   }
 
-  /**
-   * Transfer — removes units from inventory
-   */
-  static async transferStock(
-    productId: string,
-    quantity: number,
-    reason: string,
-    userId: string,
-    reference?: string
-  ) {
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.product.updateMany({
-        where: { id: productId, isActive: true, currentStock: { gte: quantity } },
-        data: { currentStock: { decrement: quantity } },
-      });
+  static stockOut(productId: string, quantity: number, reason: string, userId: string, reference?: string) {
+    return this.applyMovement({
+      productId, type: TransactionType.STOCK_OUT, delta: -quantity,
+      auditAction: 'STOCK_OUT', reason, userId, reference,
+    });
+  }
 
-      if (updated.count === 0) {
-        throw ApiError.badRequest('Insufficient stock or product not found');
-      }
+  /** Adjustment — quantity may be positive or negative. */
+  static adjustment(productId: string, quantity: number, reason: string, userId: string) {
+    return this.applyMovement({
+      productId, type: TransactionType.ADJUSTMENT, delta: quantity,
+      auditAction: 'STOCK_ADJUSTMENT', reason, userId,
+    });
+  }
 
-      const product = await tx.product.findUnique({ where: { id: productId } });
-      if (!product) throw ApiError.notFound('Product not found');
-      
-      const newStock = product.currentStock;
-      const previousStock = newStock + quantity;
+  static returnStock(productId: string, quantity: number, reason: string, userId: string, reference?: string) {
+    return this.applyMovement({
+      productId, type: TransactionType.RETURN, delta: quantity,
+      auditAction: 'STOCK_RETURN', reason, userId, reference,
+    });
+  }
 
-      const transaction = await tx.inventoryTransaction.create({
-        data: {
-          productId,
-          transactionType: TransactionType.TRANSFER,
-          quantity,
-          previousStock,
-          newStock,
-          reason,
-          reference,
-          createdById: userId,
-        },
-        include: {
-          product: { select: { name: true, sku: true } },
-          createdBy: { select: { firstName: true, lastName: true } },
-        },
-      });
-
-      await AuditService.log(tx, {
-        userId,
-        action: 'STOCK_TRANSFER',
-        entity: 'Product',
-        entityId: productId,
-        previousValue: { currentStock: previousStock },
-        newValue: { currentStock: newStock },
-      });
-
-      logger.info(`Stock TRANSFER: ${product.sku} -${quantity} (${previousStock} → ${newStock})`);
-
-      await CacheService.del(`product:${productId}`);
-      await CacheService.delPattern('products:*');
-
-      return transaction;
+  static transferStock(productId: string, quantity: number, reason: string, userId: string, reference?: string) {
+    return this.applyMovement({
+      productId, type: TransactionType.TRANSFER, delta: -quantity,
+      auditAction: 'STOCK_TRANSFER', reason, userId, reference,
     });
   }
 
